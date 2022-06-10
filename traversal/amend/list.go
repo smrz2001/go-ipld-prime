@@ -151,7 +151,7 @@ func (itr *listAmender_Iterator) Next() (idx int64, v datamodel.Node, err error)
 	if itr.Done() {
 		return -1, nil, datamodel.ErrIteratorOverread{}
 	}
-	for itr.modsItr.Next() {
+	if itr.modsItr.Next() {
 		idx = int64(itr.modsItr.Index())
 		v, err = itr.amd.LookupByIndex(idx)
 		if err != nil {
