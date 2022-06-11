@@ -42,6 +42,9 @@ var removeTests = []struct {
 	{size: 1000, num: 10},
 	{size: 1000, num: 100},
 	{size: 1000, num: 1000},
+	{size: 10000, num: 100},
+	{size: 10000, num: 1000},
+	{size: 10000, num: 10000},
 }
 
 var replaceTests = []struct {
