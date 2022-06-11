@@ -24,9 +24,12 @@ var addTests = []struct {
 	{size: 100, num: 1},
 	{size: 100, num: 10},
 	{size: 100, num: 100},
-	{size: 1000, num: 1},
+	{size: 1000, num: 10},
 	{size: 1000, num: 100},
 	{size: 1000, num: 1000},
+	{size: 10000, num: 100},
+	{size: 10000, num: 1000},
+	{size: 10000, num: 10000},
 }
 
 var removeTests = []struct {
@@ -36,7 +39,7 @@ var removeTests = []struct {
 	{size: 100, num: 1},
 	{size: 100, num: 10},
 	{size: 100, num: 100},
-	{size: 1000, num: 1},
+	{size: 1000, num: 10},
 	{size: 1000, num: 100},
 	{size: 1000, num: 1000},
 }
@@ -48,9 +51,12 @@ var replaceTests = []struct {
 	{size: 100, num: 1},
 	{size: 100, num: 10},
 	{size: 100, num: 100},
-	{size: 1000, num: 1},
+	{size: 1000, num: 10},
 	{size: 1000, num: 100},
 	{size: 1000, num: 1000},
+	{size: 10000, num: 100},
+	{size: 10000, num: 1000},
+	{size: 10000, num: 10000},
 }
 
 func BenchmarkAmend_Map_Add(b *testing.B) {
