@@ -70,7 +70,8 @@ func BenchmarkAmend_Map_Add(b *testing.B) {
 			})
 			var err error
 			for r := 0; r < b.N; r++ {
-				a := NewAmender(n)
+				tn := n
+				a := NewAmender(tn)
 				for i := 0; i < v.num; i++ {
 					err = EvalOne(a, patch.Operation{
 						Op:    patch.Op_Add,
@@ -138,7 +139,8 @@ func BenchmarkAmend_List_Add(b *testing.B) {
 			})
 			var err error
 			for r := 0; r < b.N; r++ {
-				a := NewAmender(n)
+				tn := n
+				a := NewAmender(tn)
 				for i := 0; i < v.num; i++ {
 					err = EvalOne(a, patch.Operation{
 						Op:    patch.Op_Add,
@@ -206,7 +208,8 @@ func BenchmarkAmend_Map_Remove(b *testing.B) {
 			})
 			var err error
 			for r := 0; r < b.N; r++ {
-				a := NewAmender(n)
+				tn := n
+				a := NewAmender(tn)
 				for i := 0; i < v.num; i++ {
 					err = EvalOne(a, patch.Operation{
 						Op:   patch.Op_Remove,
@@ -272,7 +275,8 @@ func BenchmarkAmend_List_Remove(b *testing.B) {
 			})
 			var err error
 			for r := 0; r < b.N; r++ {
-				a := NewAmender(n)
+				tn := n
+				a := NewAmender(tn)
 				for i := 0; i < v.num; i++ {
 					err = EvalOne(a, patch.Operation{
 						Op:   patch.Op_Remove,
@@ -340,7 +344,8 @@ func BenchmarkAmend_Map_Replace(b *testing.B) {
 			})
 			var err error
 			for r := 0; r < b.N; r++ {
-				a := NewAmender(n)
+				tn := n
+				a := NewAmender(tn)
 				for i := 0; i < v.num; i++ {
 					err = EvalOne(a, patch.Operation{
 						Op:    patch.Op_Replace,
@@ -408,7 +413,8 @@ func BenchmarkAmend_List_Replace(b *testing.B) {
 			})
 			var err error
 			for r := 0; r < b.N; r++ {
-				a := NewAmender(n)
+				tn := n
+				a := NewAmender(tn)
 				for i := 0; i < v.num; i++ {
 					err = EvalOne(a, patch.Operation{
 						Op:    patch.Op_Replace,
