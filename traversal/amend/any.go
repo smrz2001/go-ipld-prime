@@ -19,10 +19,6 @@ func newAnyAmender(base datamodel.Node, parent Amender, create bool) Amender {
 	return &anyAmender{base, parent, create}
 }
 
-func (a *anyAmender) isCreated() bool {
-	return a.created
-}
-
 func (a *anyAmender) Build() datamodel.Node {
 	// `anyAmender` is also a `Node`.
 	return (datamodel.Node)(a)

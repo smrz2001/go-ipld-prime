@@ -46,10 +46,6 @@ func newListAmender(base datamodel.Node, parent Amender, create bool) Amender {
 	return &listAmender{base, parent, create, mods}
 }
 
-func (a *listAmender) isCreated() bool {
-	return a.created
-}
-
 func (a *listAmender) Build() datamodel.Node {
 	// `listAmender` is also a `Node`.
 	return (datamodel.Node)(a)

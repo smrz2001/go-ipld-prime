@@ -21,15 +21,12 @@ type Amender interface {
 	// Build returns a traversable node that can be used with existing codec implementations. An `Amender` does not
 	// *have* to be a `Node` although currently, all `Amender` implementations are also `Node`s.
 	Build() datamodel.Node
-
-	// isCreated returns whether an amender "wraps" an existing node or represents a new node in the hierarchy.
-	isCreated() bool
 }
 
 // NewAmender returns a new amender of the right "type" (i.e. map, list, any) using the specified base node.
 func NewAmender(base datamodel.Node) Amender {
-	// Do not allow creating a new amender without a base node to refer to. Amendment assumes that there is something to
-	// amend.
+	// Do not allow externally creating a new amender without a base node to refer to. Amendment assumes that there is
+	// something to amend.
 	if base == nil {
 		panic("misuse")
 	}
@@ -44,4 +41,15 @@ func newAmender(base datamodel.Node, parent Amender, kind datamodel.Kind, create
 	} else {
 		return newAnyAmender(base, parent, create)
 	}
+}
+
+func isCreated(a Amender) bool {
+	if ma, castOk := a.(*mapAmender); castOk {
+		return ma.created
+	} else if la, castOk := a.(*listAmender); castOk {
+		return la.created
+	} else if aa, castOk := a.(*anyAmender); castOk {
+		return aa.created
+	}
+	panic("misuse")
 }

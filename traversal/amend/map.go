@@ -39,10 +39,6 @@ func newMapAmender(base datamodel.Node, parent Amender, create bool) Amender {
 	}
 }
 
-func (a *mapAmender) isCreated() bool {
-	return a.created
-}
-
 func (a *mapAmender) Build() datamodel.Node {
 	// `mapAmender` is also a `Node`.
 	return (datamodel.Node)(a)
@@ -196,7 +192,7 @@ func (itr *mapAmender_Iterator) Next() (k datamodel.Node, v datamodel.Node, _ er
 			}
 			// Skip "wrapper" nodes that represent existing sub-nodes in the hierarchy corresponding to an added leaf
 			// node.
-			if amd, castOk := v.(Amender); castOk && !amd.isCreated() {
+			if amd, castOk := v.(Amender); castOk && !isCreated(amd) {
 				continue
 			}
 			// We found a "real" node to return, increment the counter.
