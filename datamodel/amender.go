@@ -9,9 +9,5 @@ type NodeAmender interface {
 
 	// Transform will do an in-place transformation of the node at the specified path and return its previous value.
 	// If `createParents = true`, any missing parents will be created, otherwise this function will return an error.
-	Transform(path Path, createParents bool) (Node, error)
-
-	// Amend returns a `Node` representing the "effective" view of the base `Node` (if specified) along with accumulated
-	// update (if any).
-	Amend() Node
+	Transform(path Path, transform func(Node) (Node, error), createParents bool) (Node, error)
 }

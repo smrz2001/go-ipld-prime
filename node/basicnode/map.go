@@ -2,6 +2,7 @@ package basicnode
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/emirpasic/gods/maps/linkedhashmap"
 
@@ -12,7 +13,7 @@ import (
 var (
 	_ datamodel.Node                         = &plainMap{}
 	_ datamodel.NodePrototype                = Prototype__Map{}
-	_ datamodel.NodePrototypeSupportingAmend = &Prototype__Map{}
+	_ datamodel.NodePrototypeSupportingAmend = Prototype__Map{}
 	_ datamodel.NodeAmender                  = &plainMap__Builder{}
 	_ datamodel.NodeAssembler                = &plainMap__Assembler{}
 )
@@ -22,7 +23,7 @@ var (
 // plainMap is also embedded in the 'any' struct and usable from there.
 type plainMap struct {
 	// Parent node (can be any recursive type)
-	//p datamodel.Node
+	p datamodel.NodeAmender
 	// Map contents
 	m linkedhashmap.Map
 	// The following fields are needed to present an accurate "effective" view of the base node and all accumulated
@@ -34,16 +35,14 @@ type plainMap struct {
 	// This is the count of children *present in the base node* that are removed. Knowing this count allows accurate
 	// traversal of the "effective" node view.
 	r int
-	// This is the count of new children. If an added node is removed, this count should be decremented instead of
-	// `r`.
+	// This is the count of new children. If an added node is removed, this count should be decremented instead of `r`.
 	a int
 }
 
 type plainMap__Entry struct {
-	k plainString    // address of this used when we return keys as nodes, such as in iterators.  Need in one place to amortize shifts to heap when ptr'ing for iface.
-	v datamodel.Node // identical to map values.  keeping them here simplifies iteration.  (in codegen'd maps, this position is also part of amortization, but in this implementation, that's less useful.)
-	// note on alternate implementations: 'v' could also use the 'any' type, and thus amortize value allocations.  the memory size trade would be large however, so we don't, here.
-	c bool // whether this node was "added" to the map, or wraps an existing base node child node.
+	k plainString           // address of this used when we return keys as nodes, such as in iterators.  Need in one place to amortize shifts to heap when ptr'ing for iface.
+	v datamodel.NodeAmender // store an amender instead of the node so that we can access both the node and the API to update it.
+	a bool                  // whether this node was "added" to the map, or wraps an existing base node child node.
 }
 
 // -- Node interface methods -->
@@ -52,19 +51,27 @@ func (plainMap) Kind() datamodel.Kind {
 	return datamodel.Kind_Map
 }
 func (n *plainMap) LookupByString(key string) (datamodel.Node, error) {
+	if entry, err := n.lookupEntryByString(key); err != nil {
+		return nil, err
+	} else {
+		return entry.v.Build(), err
+	}
+}
+func (n *plainMap) lookupEntryByString(key string) (*plainMap__Entry, error) {
 	// Look at local state first
 	if entry, exists := n.m.Get(key); exists {
-		v := entry.(*plainMap__Entry).v
-		if v.IsNull() {
+		e := entry.(*plainMap__Entry)
+		if e.v == nil {
 			// Node was removed
 			return nil, datamodel.ErrNotExists{Segment: datamodel.PathSegmentOfString(key)}
 		}
-		return v, nil
+		return e, nil
 	}
 	// Fallback to base state (if available)
 	if n.b != nil {
 		if entry, exists := n.b.m.Get(key); exists {
-			return entry.(*plainMap__Entry).v, nil
+			e := entry.(*plainMap__Entry)
+			return e, nil
 		}
 	}
 	return nil, datamodel.ErrNotExists{Segment: datamodel.PathSegmentOfString(key)}
@@ -158,11 +165,12 @@ func (itr *plainMap_MapIterator) Next() (k datamodel.Node, v datamodel.Node, _ e
 				return nil, nil, err
 			}
 			if entry, exists := itr.n.m.Get(ks); exists {
-				v = entry.(*plainMap__Entry).v
+				e := entry.(*plainMap__Entry)
 				// Skip removed nodes
-				if v.IsNull() {
+				if e.v == nil {
 					continue
 				}
+				v = e.v.Build()
 				// Fall-through and return wrapped nodes
 			}
 			// We found a "real" node to return, increment the counter.
@@ -173,16 +181,16 @@ func (itr *plainMap_MapIterator) Next() (k datamodel.Node, v datamodel.Node, _ e
 	if itr.m != nil {
 		// Iterate over mods, skipping removed nodes.
 		for itr.m.Next() {
-			e := itr.m.Value().(*plainMap__Entry)
-			k = &e.k
-			v = e.v
+			entry := itr.m.Value().(*plainMap__Entry)
 			// Skip removed nodes
-			if v.IsNull() {
+			if entry.v == nil {
 				continue
 			}
+			k = &entry.k
+			v = entry.v.Build()
 			// Skip "wrapper" nodes that represent existing sub-nodes in the hierarchy corresponding to an added leaf
 			// node.
-			if !e.c {
+			if !entry.a {
 				continue
 			}
 			// We found a "real" node to return, increment the counter.
@@ -200,14 +208,23 @@ func (itr *plainMap_MapIterator) Done() bool {
 
 type Prototype__Map struct{}
 
-func (Prototype__Map) NewBuilder() datamodel.NodeBuilder {
-	return &plainMap__Builder{plainMap__Assembler{w: &plainMap{}}}
+func (p Prototype__Map) NewBuilder() datamodel.NodeBuilder {
+	return p.AmendingBuilder(nil)
 }
 
 // -- NodePrototypeSupportingAmend -->
 
-func (p Prototype__Map) AmendingBuilder(base datamodel.Node) datamodel.NodeAmender {
-	return p.NewBuilder().(*plainMap__Builder)
+func (Prototype__Map) AmendingBuilder(base datamodel.Node) datamodel.NodeAmender {
+	var b *plainMap = nil
+	if base != nil {
+		// If `base` is specified, it MUST be another `plainMap`.
+		if baseMap, castOk := base.(*plainMap); !castOk {
+			panic("misuse")
+		} else {
+			b = baseMap
+		}
+	}
+	return &plainMap__Builder{plainMap__Assembler{w: &plainMap{b: b}}}
 }
 
 // -- NodeBuilder -->
@@ -216,30 +233,122 @@ type plainMap__Builder struct {
 	plainMap__Assembler
 }
 
-func (nb *plainMap__Builder) Get(path datamodel.Path) (datamodel.Node, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (nb *plainMap__Builder) Transform(path datamodel.Path, createParents bool) (datamodel.Node, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (nb *plainMap__Builder) Amend() datamodel.Node {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (nb *plainMap__Builder) Build() datamodel.Node {
-	if nb.state != maState_finished {
-		panic("invalid state: assembler must be 'finished' before Build can be called!")
+	if (nb.state != maState_initial) && (nb.state != maState_finished) {
+		panic("invalid state: assembly in progress must be 'finished' before Build can be called!")
 	}
 	return nb.w
 }
 func (nb *plainMap__Builder) Reset() {
+	base := nb.w.b
 	*nb = plainMap__Builder{}
-	nb.w = &plainMap{}
+	nb.w = &plainMap{b: base}
+}
+
+// -- NodeAmender -->
+
+func (nb *plainMap__Builder) Get(path datamodel.Path) (datamodel.Node, error) {
+	// If the root is requested, return the `Node` view of the amender.
+	if path.Len() == 0 {
+		return nb.w, nil
+	}
+	childSeg, remainingPath := path.Shift()
+	childKey := childSeg.String()
+	childEntry, err := nb.w.lookupEntryByString(childKey)
+	// Since we're explicitly looking for a node, look for the child node in the current amender state and throw an
+	// error if it does not exist.
+	if err != nil {
+		return nil, err
+	}
+	childVal := childEntry.v.Build()
+	return nb.storeChildEntry(childKey, childVal, childVal.Kind(), false).Get(remainingPath)
+}
+
+func (nb *plainMap__Builder) Transform(path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
+	// Allow the base node to be replaced.
+	if path.Len() == 0 {
+		prevNode := nb.w
+		if newNode, err := transform(prevNode); err != nil {
+			return nil, err
+		} else if newMap, castOk := newNode.(*plainMap); !castOk { // only use another `plainMap` to replace this one
+			return nil, fmt.Errorf("map transform: cannot transform root into incompatible type: %v", reflect.TypeOf(newNode))
+		} else {
+			*nb.w = *newMap
+			return prevNode, nil
+		}
+	}
+	childSeg, remainingPath := path.Shift()
+	childKey := childSeg.String()
+	atLeaf := remainingPath.Len() == 0
+	childEntry, err := nb.w.lookupEntryByString(childKey)
+	if err != nil {
+		// - Return any error other than "not exists".
+		// - If the child node does not exist and `createParents = true`, create the new hierarchy, otherwise throw an
+		//   error.
+		// - Even if `createParent = false`, if we're at the leaf, don't throw an error because we don't need to create
+		//   any more intermediate parent nodes.
+		if _, notFoundErr := err.(datamodel.ErrNotExists); !notFoundErr || !(atLeaf || createParents) {
+			return nil, fmt.Errorf("transform: parent position at %q did not exist (and createParents was false)", path)
+		}
+	}
+	if atLeaf {
+		if newChildVal, err := transform(childEntry.v.Build()); err != nil {
+			return nil, err
+		} else if newChildVal == nil {
+			// Use the "Null" node to indicate a removed child.
+			nb.w.m.Put(childKey, &plainMap__Entry{plainString(childKey), nil, false})
+			// If the child being removed didn't already exist, we could error out but we don't have to because the
+			// state will remain consistent. This operation is equivalent to adding a child then removing it, in which
+			// case we would have incremented then decremented `adds`, leaving it the same.
+			if childEntry != nil {
+				// If the child node being removed is a new node previously added to the node hierarchy, decrement
+				// `adds`, otherwise increment `rems`. This allows us to retain knowledge about the "history" of the
+				// base hierarchy.
+				if childEntry.a {
+					nb.w.a--
+				} else {
+					nb.w.r++
+				}
+			}
+		} else {
+			// While building the nested amender tree, only count nodes as "added" when they didn't exist and had to be
+			// created to fill out the hierarchy.
+			created := false
+			if childEntry == nil {
+				nb.w.a++
+				created = true
+			}
+			nb.storeChildEntry(childKey, newChildVal, newChildVal.Kind(), created)
+		}
+		return childEntry.v.Build(), nil
+	}
+	// While building the nested amender tree, only count nodes as "added" when they didn't exist and had to be created
+	// to fill out the hierarchy.
+	var childKind datamodel.Kind
+	created := false
+	if childEntry == nil {
+		nb.w.a++
+		created = true
+		// If we're not at the leaf yet, look ahead on the remaining path to determine what kind of intermediate parent
+		// node we need to created.
+		nextChildSeg, _ := remainingPath.Shift()
+		if _, err = nextChildSeg.Index(); err == nil {
+			// As per the discussion [here](https://github.com/smrz2001/go-ipld-prime/pull/1#issuecomment-1143035685),
+			// this code assumes that if we're dealing with an integral path segment, it corresponds to a list index.
+			childKind = datamodel.Kind_List
+		} else {
+			// From the same discussion as above, any non-integral, intermediate path can be assumed to be a map key.
+			childKind = datamodel.Kind_Map
+		}
+	} else {
+		childKind = childEntry.v.Build().Kind()
+	}
+	return nb.storeChildEntry(childKey, childEntry.v.Build(), childKind, created).Transform(remainingPath, transform, createParents)
+}
+
+func (nb *plainMap__Builder) storeChildEntry(k string, v datamodel.Node, kind datamodel.Kind, created bool) datamodel.NodeAmender {
+	nb.w.m.Put(k, &plainMap__Entry{plainString(k), Prototype.Any.AmendingBuilder(v), created})
+	return nb
 }
 
 // -- NodeAssembler -->
@@ -511,8 +620,9 @@ func (mva *plainMap__ValueAssembler) AssignNode(v datamodel.Node) error {
 	itr := mva.ma.w.m.Iterator()
 	itr.Last()
 	val := itr.Value().(*plainMap__Entry)
-	val.v = v
-	val.c = true
+	nb := Prototype.Any.AmendingBuilder(v)
+	val.v = nb
+	val.a = true
 	mva.ma.w.a++
 	mva.ma.state = maState_initial
 	mva.ma = nil // invalidate self to prevent further incorrect use.

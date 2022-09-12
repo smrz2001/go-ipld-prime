@@ -7,8 +7,9 @@ import (
 
 var (
 	//_ datamodel.Node          = &anyNode{}
-	_ datamodel.NodePrototype = Prototype__Any{}
-	_ datamodel.NodeBuilder   = &anyBuilder{}
+	_ datamodel.NodePrototype                = Prototype__Any{}
+	_ datamodel.NodeBuilder                  = &anyBuilder{}
+	_ datamodel.NodePrototypeSupportingAmend = Prototype__Any{}
 	//_ datamodel.NodeAssembler = &anyAssembler{}
 )
 
@@ -36,6 +37,19 @@ type Prototype__Any struct{}
 
 func (Prototype__Any) NewBuilder() datamodel.NodeBuilder {
 	return &anyBuilder{}
+}
+
+func (p Prototype__Any) AmendingBuilder(base datamodel.Node) datamodel.NodeAmender {
+	nb := &anyBuilder{}
+	if base != nil {
+		switch base.Kind() {
+		case datamodel.Kind_Map, datamodel.Kind_List:
+			nb.AssignNull()
+		default:
+			nb.AssignNode(base)
+		}
+	}
+	return nb
 }
 
 // -- NodeBuilder -->
@@ -68,6 +82,16 @@ type anyBuilder struct {
 	mapBuilder  plainMap__Builder
 	listBuilder plainList__Builder
 	scalarNode  datamodel.Node
+}
+
+func (nb *anyBuilder) Get(path datamodel.Path) (datamodel.Node, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (nb *anyBuilder) Transform(path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (nb *anyBuilder) Reset() {
