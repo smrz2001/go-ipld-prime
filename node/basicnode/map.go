@@ -10,10 +10,11 @@ import (
 )
 
 var (
-	_ datamodel.Node          = &plainMap{}
-	_ datamodel.NodePrototype = Prototype__Map{}
-	_ datamodel.NodeAmender   = &plainMap__Builder{}
-	_ datamodel.NodeAssembler = &plainMap__Assembler{}
+	_ datamodel.Node                         = &plainMap{}
+	_ datamodel.NodePrototype                = Prototype__Map{}
+	_ datamodel.NodePrototypeSupportingAmend = &Prototype__Map{}
+	_ datamodel.NodeAmender                  = &plainMap__Builder{}
+	_ datamodel.NodeAssembler                = &plainMap__Assembler{}
 )
 
 // plainMap is a concrete type that provides a map-kind datamodel.Node.
@@ -21,7 +22,7 @@ var (
 // plainMap is also embedded in the 'any' struct and usable from there.
 type plainMap struct {
 	// Parent node (can be any recursive type)
-	p datamodel.Node
+	//p datamodel.Node
 	// Map contents
 	m linkedhashmap.Map
 	// The following fields are needed to present an accurate "effective" view of the base node and all accumulated
