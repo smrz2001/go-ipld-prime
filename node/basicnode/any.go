@@ -40,14 +40,18 @@ func (Prototype__Any) NewBuilder() datamodel.NodeBuilder {
 }
 
 func (p Prototype__Any) AmendingBuilder(base datamodel.Node) datamodel.NodeAmender {
-	nb := &anyBuilder{}
-	if base != nil {
-		switch base.Kind() {
-		case datamodel.Kind_Map, datamodel.Kind_List:
-			nb.AssignNull()
-		default:
-			nb.AssignNode(base)
-		}
+	return p.amender(base)
+}
+
+func (Prototype__Any) amender(base datamodel.Node) datamodel.NodeAmender {
+	nb := &anyBuilder{kind: base.Kind()}
+	switch base.Kind() {
+	case datamodel.Kind_Map:
+		nb.mapBuilder = *(Prototype.Map.AmendingBuilder(base).(*plainMap__Builder))
+	case datamodel.Kind_List:
+		nb.listBuilder = *(Prototype.List.AmendingBuilder(base).(*plainList__Builder))
+	default:
+		nb.scalarNode = base
 	}
 	return nb
 }
@@ -85,13 +89,36 @@ type anyBuilder struct {
 }
 
 func (nb *anyBuilder) Get(path datamodel.Path) (datamodel.Node, error) {
-	//TODO implement me
-	panic("implement me")
+	// If the base node is an amender, use it, otherwise return the base node.
+	switch nb.kind {
+	case datamodel.Kind_Map:
+		return nb.mapBuilder.Get(path)
+	case datamodel.Kind_List:
+		return nb.listBuilder.Get(path)
+	}
+	return nb.scalarNode, nil
 }
 
 func (nb *anyBuilder) Transform(path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
-	//TODO implement me
-	panic("implement me")
+	// Allow the base node to be replaced.
+	if path.Len() == 0 {
+		if prevNode, err := nb.Get(datamodel.Path{}); err != nil {
+			return nil, err
+		} else if newNode, err := transform(prevNode); err != nil {
+			return nil, err
+		} else {
+			*nb = *Prototype.Any.amender(newNode).(*anyBuilder)
+			return prevNode, nil
+		}
+	}
+	// If the base node is an amender, use it, otherwise panic.
+	switch nb.kind {
+	case datamodel.Kind_Map:
+		return nb.mapBuilder.Transform(path, transform, createParents)
+	case datamodel.Kind_List:
+		return nb.listBuilder.Transform(path, transform, createParents)
+	}
+	panic("misuse")
 }
 
 func (nb *anyBuilder) Reset() {
