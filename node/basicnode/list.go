@@ -162,7 +162,7 @@ func (nb *plainList__Builder) Reset() {
 
 // -- NodeAmender -->
 
-func (nb *plainList__Builder) Get(path datamodel.Path) (datamodel.Node, error) {
+func (nb *plainList__Builder) Get(cfg datamodel.NodeAmendCfg, path datamodel.Path) (datamodel.Node, error) {
 	// If the root is requested, return the `Node` view of the amender.
 	if path.Len() == 0 {
 		return nb.w, nil
@@ -174,10 +174,10 @@ func (nb *plainList__Builder) Get(path datamodel.Path) (datamodel.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return childAmender.Get(remainingPath)
+	return childAmender.Get(cfg, remainingPath)
 }
 
-func (nb *plainList__Builder) Transform(path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
+func (nb *plainList__Builder) Transform(cfg datamodel.NodeAmendCfg, path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
 	// Allow the base node to be replaced.
 	if path.Len() == 0 {
 		prevNode := nb.w
@@ -267,7 +267,7 @@ func (nb *plainList__Builder) Transform(path datamodel.Path, transform func(data
 	if err = nb.storeChildAmender(childIdx, childVal, childKind); err != nil {
 		return nil, err
 	}
-	return childAmender.Transform(remainingPath, transform, createParents)
+	return childAmender.Transform(cfg, remainingPath, transform, createParents)
 }
 
 func (nb *plainList__Builder) storeChildAmender(childIdx int64, n datamodel.Node, k datamodel.Kind) error {
@@ -303,10 +303,10 @@ func (nb *plainList__Builder) storeChildAmender(childIdx int64, n datamodel.Node
 		nb.w.x = append(nb.w.x, elems...)
 	} else {
 		numElems := int64(len(elems))
-		newX := make([]datamodel.NodeAmender, nb.w.Length()+numElems)
+		newX := make([]datamodel.NodeAmender, nb.w.Length()+numElems-1)
 		copy(newX, nb.w.x[:childIdx])
-		copy(newX[:childIdx], elems)
-		copy(newX[:childIdx+numElems], nb.w.x[childIdx+1:])
+		copy(newX[childIdx:], elems)
+		copy(newX[childIdx+numElems:], nb.w.x[childIdx+1:])
 		nb.w.x = newX
 	}
 	return nil
@@ -476,7 +476,7 @@ func (lva *plainList__ValueAssembler) AssignBytes(v []byte) error {
 	return lva.AssignNode(&vb)
 }
 func (lva *plainList__ValueAssembler) AssignLink(v datamodel.Link) error {
-	vb := plainLink{v}
+	vb := plainLink{x: v}
 	return lva.AssignNode(&vb)
 }
 func (lva *plainList__ValueAssembler) AssignNode(v datamodel.Node) error {

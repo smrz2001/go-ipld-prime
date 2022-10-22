@@ -165,7 +165,7 @@ func (nb *plainMap__Builder) Reset() {
 
 // -- NodeAmender -->
 
-func (nb *plainMap__Builder) Get(path datamodel.Path) (datamodel.Node, error) {
+func (nb *plainMap__Builder) Get(cfg datamodel.NodeAmendCfg, path datamodel.Path) (datamodel.Node, error) {
 	// If the root is requested, return the `Node` view of the amender.
 	if path.Len() == 0 {
 		return nb.Build(), nil
@@ -177,10 +177,10 @@ func (nb *plainMap__Builder) Get(path datamodel.Path) (datamodel.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return childAmender.Get(remainingPath)
+	return childAmender.Get(cfg, remainingPath)
 }
 
-func (nb *plainMap__Builder) Transform(path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
+func (nb *plainMap__Builder) Transform(cfg datamodel.NodeAmendCfg, path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
 	// Allow the base node to be replaced.
 	if path.Len() == 0 {
 		prevNode := nb.Build()
@@ -207,6 +207,11 @@ func (nb *plainMap__Builder) Transform(path datamodel.Path, transform func(datam
 			return nil, fmt.Errorf("transform: parent position at %q did not exist (and createParents was false)", path)
 		}
 	}
+	// Allocate storage space
+	if nb.w.m == nil {
+		nb.w.t = make([]plainMap__Entry, 0, 1)
+		nb.w.m = make(map[string]datamodel.NodeAmender, 1)
+	}
 	if atLeaf {
 		var prevChildVal datamodel.Node = nil
 		if childAmender != nil {
@@ -228,10 +233,14 @@ func (nb *plainMap__Builder) Transform(path datamodel.Path, transform func(datam
 						nb.w.t[idx].v = a
 						nb.w.m[string(nb.w.t[idx].k)] = a
 					}
+					return prevChildVal, nil
 				}
 			}
+			childAmender = NewAmender(newChildVal, newChildVal.Kind())
+			nb.w.t = append(nb.w.t, plainMap__Entry{plainString(childKey), childAmender})
+			nb.w.m[childKey] = childAmender
+			return prevChildVal, nil
 		}
-		return prevChildVal, nil
 	}
 	if childAmender == nil {
 		// If we're not at the leaf yet, look ahead on the remaining path to determine what kind of intermediate parent
@@ -246,12 +255,11 @@ func (nb *plainMap__Builder) Transform(path datamodel.Path, transform func(datam
 			// From the same discussion as above, any non-integral, intermediate path can be assumed to be a map key.
 			childKind = datamodel.Kind_Map
 		}
-		l := nb.w.Length() - 1
 		childAmender = NewAmender(nil, childKind)
-		nb.w.t[l].v = childAmender
-		nb.w.m[string(nb.w.t[l].k)] = childAmender
+		nb.w.t = append(nb.w.t, plainMap__Entry{plainString(childKey), childAmender})
+		nb.w.m[childKey] = childAmender
 	}
-	return childAmender.Transform(remainingPath, transform, createParents)
+	return childAmender.Transform(cfg, remainingPath, transform, createParents)
 }
 
 // -- NodeAssembler -->
@@ -520,7 +528,7 @@ func (mva *plainMap__ValueAssembler) AssignBytes(v []byte) error {
 	return mva.AssignNode(&vb)
 }
 func (mva *plainMap__ValueAssembler) AssignLink(v datamodel.Link) error {
-	vb := plainLink{v}
+	vb := plainLink{x: v}
 	return mva.AssignNode(&vb)
 }
 func (mva *plainMap__ValueAssembler) AssignNode(v datamodel.Node) error {

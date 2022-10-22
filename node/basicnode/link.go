@@ -1,24 +1,29 @@
 package basicnode
 
 import (
+	"fmt"
+	"reflect"
+
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/mixins"
 )
 
 var (
-	_ datamodel.Node          = &plainLink{}
-	_ datamodel.NodePrototype = Prototype__Link{}
-	_ datamodel.NodeBuilder   = &plainLink__Builder{}
-	_ datamodel.NodeAssembler = &plainLink__Assembler{}
+	_ datamodel.Node                         = &plainLink{}
+	_ datamodel.NodePrototype                = Prototype__Link{}
+	_ datamodel.NodePrototypeSupportingAmend = Prototype__Link{}
+	_ datamodel.NodeBuilder                  = &plainLink__Builder{}
+	_ datamodel.NodeAssembler                = &plainLink__Assembler{}
 )
 
 func NewLink(value datamodel.Link) datamodel.Node {
-	return &plainLink{value}
+	return &plainLink{x: value}
 }
 
 // plainLink is a simple box around a Link that complies with datamodel.Node.
 type plainLink struct {
 	x datamodel.Link
+	c datamodel.NodeAmender
 }
 
 // -- Node interface methods -->
@@ -84,6 +89,27 @@ func (Prototype__Link) NewBuilder() datamodel.NodeBuilder {
 	return &plainLink__Builder{plainLink__Assembler{w: &w}}
 }
 
+// -- NodePrototypeSupportingAmend -->
+
+func (p Prototype__Link) AmendingBuilder(base datamodel.Node) datamodel.NodeAmender {
+	var l *plainLink
+	if base != nil {
+		// If `base` is specified, it MUST be another `plainLink`.
+		if baseLink, castOk := base.(*plainLink); !castOk {
+			panic("misuse")
+		} else {
+			l = baseLink
+		}
+	} else {
+		l = &plainLink{}
+	}
+	return p.amender(l)
+}
+
+func (Prototype__Link) amender(base datamodel.Node) datamodel.NodeAmender {
+	return &plainLink__Builder{plainLink__Assembler{w: base.(*plainLink)}}
+}
+
 // -- NodeBuilder -->
 
 type plainLink__Builder struct {
@@ -96,6 +122,59 @@ func (nb *plainLink__Builder) Build() datamodel.Node {
 func (nb *plainLink__Builder) Reset() {
 	var w plainLink
 	*nb = plainLink__Builder{plainLink__Assembler{w: &w}}
+}
+
+// -- NodeAmender -->
+
+func (nb *plainLink__Builder) Get(cfg datamodel.NodeAmendCfg, path datamodel.Path) (datamodel.Node, error) {
+	err := nb.loadLink(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if path.Len() == 0 {
+		return nb.Build(), nil
+	}
+	return nb.w.c.Get(cfg, path)
+}
+
+func (nb *plainLink__Builder) Transform(cfg datamodel.NodeAmendCfg, path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
+	// Allow the base node to be replaced.
+	if path.Len() == 0 {
+		prevNode := nb.Build()
+		if newNode, err := transform(prevNode); err != nil {
+			return nil, err
+		} else if newLink, castOk := newNode.(*plainLink); !castOk { // only use another `plainLink` to replace this one
+			return nil, fmt.Errorf("transform: cannot transform root into incompatible type: %v", reflect.TypeOf(newNode))
+		} else {
+			*nb.w = *newLink
+			return prevNode, nil
+		}
+	}
+	err := nb.loadLink(cfg)
+	if err != nil {
+		return nil, err
+	}
+	childVal, err := nb.w.c.Transform(cfg, path, transform, createParents)
+	if err != nil {
+		return nil, err
+	}
+	newLink, err := cfg.LinkStorer(nb.w.x.Prototype(), nb.Build())
+	if err != nil {
+		return nil, fmt.Errorf("transform: error storing transformed node at %q: %w", path, err)
+	}
+	nb.w.x = newLink
+	return childVal, nil
+}
+
+func (nb *plainLink__Builder) loadLink(cfg datamodel.NodeAmendCfg) error {
+	if nb.w.c == nil {
+		c, err := cfg.LinkLoader(nb.w.x)
+		if err != nil {
+			return err
+		}
+		nb.w.c = NewAmender(c, c.Kind())
+	}
+	return nil
 }
 
 // -- NodeAssembler -->

@@ -85,24 +85,27 @@ type anyBuilder struct {
 
 	mapBuilder  plainMap__Builder
 	listBuilder plainList__Builder
+	linkBuilder plainLink__Builder
 	scalarNode  datamodel.Node
 }
 
-func (nb *anyBuilder) Get(path datamodel.Path) (datamodel.Node, error) {
+func (nb *anyBuilder) Get(cfg datamodel.NodeAmendCfg, path datamodel.Path) (datamodel.Node, error) {
 	// If the base node is an amender, use it, otherwise return the base node.
 	switch nb.kind {
 	case datamodel.Kind_Map:
-		return nb.mapBuilder.Get(path)
+		return nb.mapBuilder.Get(cfg, path)
 	case datamodel.Kind_List:
-		return nb.listBuilder.Get(path)
+		return nb.listBuilder.Get(cfg, path)
+	case datamodel.Kind_Link:
+		return nb.linkBuilder.Get(cfg, path)
 	}
 	return nb.scalarNode, nil
 }
 
-func (nb *anyBuilder) Transform(path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
+func (nb *anyBuilder) Transform(cfg datamodel.NodeAmendCfg, path datamodel.Path, transform func(datamodel.Node) (datamodel.Node, error), createParents bool) (datamodel.Node, error) {
 	// Allow the base node to be replaced.
 	if path.Len() == 0 {
-		if prevNode, err := nb.Get(datamodel.Path{}); err != nil {
+		if prevNode, err := nb.Get(cfg, datamodel.Path{}); err != nil {
 			return nil, err
 		} else if newNode, err := transform(prevNode); err != nil {
 			return nil, err
@@ -114,9 +117,11 @@ func (nb *anyBuilder) Transform(path datamodel.Path, transform func(datamodel.No
 	// If the base node is an amender, use it, otherwise panic.
 	switch nb.kind {
 	case datamodel.Kind_Map:
-		return nb.mapBuilder.Transform(path, transform, createParents)
+		return nb.mapBuilder.Transform(cfg, path, transform, createParents)
 	case datamodel.Kind_List:
-		return nb.listBuilder.Transform(path, transform, createParents)
+		return nb.listBuilder.Transform(cfg, path, transform, createParents)
+	case datamodel.Kind_Link:
+		return nb.linkBuilder.Transform(cfg, path, transform, createParents)
 	}
 	panic("misuse")
 }
@@ -193,7 +198,7 @@ func (nb *anyBuilder) AssignLink(v datamodel.Link) error {
 		panic("misuse")
 	}
 	nb.kind = datamodel.Kind_Link
-	nb.scalarNode = NewLink(v)
+	nb.linkBuilder.w = &plainLink{x: v}
 	return nil
 }
 func (nb *anyBuilder) AssignNode(v datamodel.Node) error {
@@ -229,7 +234,7 @@ func (nb *anyBuilder) Build() datamodel.Node {
 	case datamodel.Kind_Bytes:
 		return nb.scalarNode
 	case datamodel.Kind_Link:
-		return nb.scalarNode
+		return nb.linkBuilder.Build()
 	case 99:
 		return nb.scalarNode
 	default:
