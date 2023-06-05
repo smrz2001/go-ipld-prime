@@ -1,11 +1,11 @@
 module github.com/ipld/go-ipld-prime/storage/bsadapter
 
-go 1.18
+go 1.19
 
 require (
 	github.com/ipfs/go-block-format v0.0.3
-	github.com/ipfs/go-cid v0.3.2
-	github.com/ipfs/go-ipfs-blockstore v1.2.0
+	github.com/ipfs/go-cid v0.4.1
+	github.com/ipfs/go-ipfs-blockstore v1.3.0
 )
 
 require (
@@ -37,8 +37,8 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
-	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29 // indirect
-	golang.org/x/sys v0.0.0-20220405210540-1e041c57c461 // indirect
+	golang.org/x/crypto v0.1.0 // indirect
+	golang.org/x/sys v0.1.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
