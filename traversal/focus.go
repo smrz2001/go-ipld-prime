@@ -5,6 +5,7 @@ import (
 
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
 )
 
 // Focus traverses a Node graph according to a path, reaches a single Node,
@@ -76,7 +77,27 @@ func (prog Progress) Focus(n datamodel.Node, p datamodel.Path, fn VisitFn) error
 // the Focus functions provide updated Progress objects which can be used to do nested traversals while keeping consistent track of progress,
 // such that continued nested uses of Walk or Focus or Get will see the fully contextualized Path.
 func (prog Progress) Get(n datamodel.Node, p datamodel.Path) (datamodel.Node, error) {
-	return prog.get(n, p, false)
+	//return prog.get(n, p, false)
+	amendCfg := datamodel.NodeAmendCfg{
+		LinkLoader: func(link datamodel.Link) (datamodel.Node, error) {
+			if prog.Cfg == nil {
+				return nil, fmt.Errorf("error traversing node at %q: could not load link %q", prog.Path, link)
+			}
+			linkCtx := linking.LinkContext{Ctx: prog.Cfg.Ctx}
+			np, err := prog.Cfg.LinkTargetNodePrototypeChooser(link, linkCtx)
+			if err != nil {
+				return nil, err
+			}
+			return prog.Cfg.LinkSystem.Load(linkCtx, link, np)
+		},
+		LinkStorer: func(lp datamodel.LinkPrototype, node datamodel.Node) (datamodel.Link, error) {
+			if prog.Cfg == nil {
+				return nil, fmt.Errorf("error storing node at %q", prog.Path)
+			}
+			return prog.Cfg.LinkSystem.Store(linking.LinkContext{Ctx: prog.Cfg.Ctx}, lp, node)
+		},
+	}
+	return basicnode.NewAmender(n, n.Kind()).Get(amendCfg, p)
 }
 
 // get is the internal implementation for Focus and Get.
@@ -196,12 +217,43 @@ func (prog *Progress) get(n datamodel.Node, p datamodel.Path, trackProgress bool
 // does a large amount of the intermediate bookkeeping that's useful when
 // creating new values which are partial updates to existing values.
 func (prog Progress) FocusedTransform(n datamodel.Node, p datamodel.Path, fn TransformFn, createParents bool) (datamodel.Node, error) {
-	prog.init()
-	nb := n.Prototype().NewBuilder()
-	if err := prog.focusedTransform(n, nb, p, fn, createParents); err != nil {
-		return nil, err
+	//prog.init()
+	//nb := n.Prototype().NewBuilder()
+	//if err := prog.focusedTransform(n, nb, p, fn, createParents); err != nil {
+	//	return nil, err
+	//}
+	//return nb.Build(), nil
+	amendCfg := datamodel.NodeAmendCfg{
+		LinkLoader: func(link datamodel.Link) (datamodel.Node, error) {
+			if prog.Cfg == nil {
+				return nil, fmt.Errorf("error traversing node at %q: could not load link %q", prog.Path, link)
+			}
+			linkCtx := linking.LinkContext{Ctx: prog.Cfg.Ctx}
+			np, err := prog.Cfg.LinkTargetNodePrototypeChooser(link, linkCtx)
+			if err != nil {
+				return nil, err
+			}
+			return prog.Cfg.LinkSystem.Load(linkCtx, link, np)
+		},
+		LinkStorer: func(lp datamodel.LinkPrototype, node datamodel.Node) (datamodel.Link, error) {
+			if prog.Cfg == nil {
+				return nil, fmt.Errorf("error storing node at %q", prog.Path)
+			}
+			return prog.Cfg.LinkSystem.Store(linking.LinkContext{Ctx: prog.Cfg.Ctx}, lp, node)
+		},
 	}
-	return nb.Build(), nil
+	nb := n.Prototype().NewBuilder()
+	if err := datamodel.Copy(n, nb); err != nil {
+		return nil, err
+	} else {
+		copiedNode := nb.Build()
+		if _, err = basicnode.NewAmender(copiedNode, copiedNode.Kind()).Transform(amendCfg, p, func(node datamodel.Node) (datamodel.Node, error) {
+			return fn(prog, node)
+		}, createParents); err != nil {
+			return nil, err
+		}
+		return copiedNode, nil
+	}
 }
 
 // focusedTransform assumes that an update will actually happen, and as it recurses deeper,
